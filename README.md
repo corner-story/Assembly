@@ -1,2 +1,2 @@
 # Assembly
-8080 assembly
+8086 assembly
