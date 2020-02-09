@@ -1,6 +1,7 @@
 assume cs:code
 
 code segment
+
 start:
     mov ah, 0
     int 16H
