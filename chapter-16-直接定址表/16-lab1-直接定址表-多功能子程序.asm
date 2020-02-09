@@ -14,8 +14,8 @@ start:
     mov cx, offset FINISH - offset INT7CH
     rep movsb
 
-    mov word ptr es:[7ch*4], 0200H
-    mov word ptr es:[7ch*4+2], 0000H
+    mov word ptr es:[7ch*4], 0000H
+    mov word ptr es:[7ch*4+2], 0020H
 
     mov ax, 4c00H
     int 21H
@@ -27,7 +27,7 @@ start:
 ; ah=3, 向上滚动一行
 INT7CH:
     jmp short begin
-    dw offset sub00-offset INT7CH, offset sub01-offset INT7CH, offset sub02-offset INT7CH, offset sub03 - offset INT7CH
+    table dw sub00, sub01, sub02, sub03
 begin:
     push bx
 
@@ -37,8 +37,10 @@ begin:
     mov bh, 0
     mov bl, ah
     add bx, bx
-    mov bx, cs:[0202H+bx]
-    add bx, 0200H
+    
+    mov bx, cs:[2+bx]
+    sub bx, offset INT7CH
+
     call bx
 _end:
     pop bx
