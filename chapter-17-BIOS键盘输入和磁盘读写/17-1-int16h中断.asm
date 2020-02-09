@@ -9,7 +9,7 @@ start:
     cmp al, 'r'
     je red
     cmp al, 'g'
-    je blue
+    je green
     cmp al, 'b'
     je blue
     jmp short return
@@ -18,8 +18,8 @@ red:
 green:
     shl ah, 1
 blue:
-    mov ax, 0B800H
-    mov es, ax
+    mov bx, 0B800H
+    mov es, bx
     mov di, 1
     mov cx, 25*80
 s:
