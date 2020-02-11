@@ -9,7 +9,7 @@ start:
     mov es, ax     ; 目的地址
     mov bx, 0
 
-    mov al, 1   ; 要读取的扇区数
+    mov al, 6   ; 要读取的扇区数
     mov ch, 0   ; 柱面
     mov cl, 2   ; 扇区
     mov dh, 0   ; 磁头
