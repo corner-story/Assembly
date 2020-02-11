@@ -9,8 +9,112 @@ start:
     
     call clearscreen
     call showinfo
+    call selectinput
 
     jmp $
+
+
+; 读取输入
+selectinput:
+    jmp short _inputstart
+    db  "please input your choose: ", 0
+_inputstart:
+    push ax
+    push bx
+    push cx
+    push ds
+    push si
+    push es
+    push di
+
+    mov ax, 07E0H
+    mov ds, ax
+    mov si, offset selectinput + 2
+
+    mov ax, 0B800H
+    mov es, ax
+    mov di, (15*80+16)*2
+    mov ah, 2
+    call showstr
+    ; 置光标
+    mov bh, 0
+    mov dh, 15
+    mov dl, 42
+    mov ah, 2
+    int 10H
+    
+    mov di, (15*80+42)*2
+_loopinput:
+    ; 读取键盘输入
+    mov ah, 0
+    int 16H
+
+    cmp al, 08H
+    je _backspace
+
+    cmp al, 0DH
+    je _enter
+
+    cmp al, 31H
+    jb _loopinput
+    cmp al, 34H
+    ja _loopinput
+    mov ah, 2
+    mov es:[di], ax
+    jmp _loopinput
+
+_backspace:
+    ; 删除键
+    mov byte ptr es:[di], ' '
+    jmp _loopinput
+_enter:
+    ; 回车键
+    mov ah, es:[di]
+    sub ah, 30H
+    call fuck
+    jmp _loopinput
+
+    pop di
+    pop es
+    pop si
+    pop ds
+    pop cx
+    pop bx
+    pop ax
+    ret
+
+
+; 处理四个功能
+; ah=功能号
+fuck:
+    jmp short _fuck_start
+    dw 0000, 0FFFFH
+_fuck_start:
+    mov bx, 07E0H
+    mov ds, bx
+    mov si, offset fuck + 2
+    cmp ah, 1
+    je _fuck_reset
+    ; cmp ah, 2
+    ; je _fuck_systemstart
+    ; cmp ah, 3
+    ; je _fuck_clock
+    ; cmp ah, 4
+    ; je _fuck_setclock
+    jmp short _fuck_return
+
+_fuck_reset:
+    jmp dword ptr ds:[si]
+
+
+_fuck_return:
+
+    ret
+
+
+
+
+
 
 ; 显示提示信息
 showinfo:
@@ -50,13 +154,6 @@ _loopshow:
     add di, 160         
     loop _loopshow
 
-    ; 置光标
-    mov bh, 0
-    mov dh, 16
-    mov dl, 40
-    mov ah, 2
-    int 10H
-
     pop di
     pop es
     pop si
@@ -65,6 +162,7 @@ _loopshow:
     pop bx
     pop ax
     ret
+
 
 
 ; 显示字符串
