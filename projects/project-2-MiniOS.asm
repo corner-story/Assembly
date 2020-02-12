@@ -7,8 +7,14 @@ start:
     mov ss, ax
     mov sp, 0200H
     
+    ; 安装新的int 9
+    mov ah, 1
+    call NewInt9
+
     mov bx, 0
     call clearscreen
+
+    ; 显示信息
     call showinfo
 
     call selectinput
@@ -92,6 +98,15 @@ fuck:
     jmp short _fuck_start
     dw 0000, 0FFFFH
 _fuck_start:
+    push ax
+    push bx
+    push cx
+    push dx
+    push ds
+    push si
+    push es
+    push di
+
     mov bx, 07E0H
     mov ds, bx
     mov si, offset fuck + 2
@@ -107,6 +122,8 @@ _fuck_start:
 
 ; reset system, 重新启动计算机, cs:ip=ffff:0000
 _fuck_reset:
+    mov ah, 0
+    call NewInt9
     jmp dword ptr ds:[si]
 ; start system, 从硬盘引导计算机
 _fuck_systemstart:
@@ -122,6 +139,8 @@ _fuck_systemstart:
     mov ah, 2
     int 13H
 
+    mov ah, 0
+    call NewInt9
     mov ax, 7C00H
     jmp ax
 ; 在1页显示时钟
@@ -130,7 +149,14 @@ _fuck_clock:
     jmp short _fuck_return
 
 _fuck_return:
-
+    pop di
+    pop es
+    pop si
+    pop ds
+    pop dx
+    pop cx
+    pop bx
+    pop ax
     ret
 
 ; 在1页显示时钟
@@ -316,6 +342,109 @@ _loopclear:
     pop bx
     pop ax
     ret
+
+; 安装新的int 9
+; ah=1, 安装新的
+; ah=0, 恢复int 9
+NewInt9:
+    jmp short _dealstart
+    dw 0, 0
+_dealstart:
+    push ax
+    push bx
+    push cx
+    push dx
+    push ds
+    push si
+    push es
+    push di
+
+    mov bx, 07E0H
+    mov ds, bx
+    mov bx, 0
+    mov es, bx
+
+    cmp ah, 1
+    je _install
+    cmp ah, 0
+    jne _dealreturn
+    mov si, offset NewInt9 + 2
+    mov ax, ds:[si]
+    mov es:[9*4+0], ax
+    mov ax, ds:[si+2]
+    mov es:[9*4+2], ax 
+    jmp _dealreturn
+_install:
+    mov si, offset _NEWINT9
+    mov di, 0200H
+    cld
+    mov cx, offset _NEWINT9_END - offset _NEWINT9
+    rep movsb
+
+    mov si, offset NewInt9 + 2
+    push es:[9*4+0]
+    pop ds:[si]
+    push es:[9*4+2]
+    pop ds:[si+2]
+
+    mov word ptr es:[9*4+0], 0200H
+    mov word ptr es:[9*4+2], 0000H
+
+    jmp _dealreturn
+; 新的int 9中断代码
+_NEWINT9:
+    push ax
+    push bx
+    push cx
+    push ds
+
+    in al, 60H
+    mov bx, 07E0H
+    mov ds, bx
+    mov bx, offset NewInt9 + 2
+    ; 调用旧int 9
+    pushf
+    call dword ptr ds:[bx]
+
+    cmp al, 0001H               ; 检测ESC
+    jne _ONTHERS
+    mov bp, 1
+    jmp short _NEWINT9_RETURN
+_ONTHERS:
+    cmp al, 3BH                 ; 检测F1
+    jne _NEWINT9_RETURN
+    ; 修改屏幕显示属性
+    mov ax, 0B800H
+    mov ds, ax
+    mov bx, 1
+    mov cx, 25*80
+_CHANGECOLOR:
+    add byte ptr ds:[bx], 1
+    add bx, 2 
+    loop _CHANGECOLOR
+_NEWINT9_RETURN:
+
+    pop ds
+    pop cx
+    pop bx
+    pop ax
+    iret
+_NEWINT9_END:
+    nop
+
+_dealreturn:
+    pop di
+    pop es
+    pop si
+    pop ds
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+
+
+
 
 ; delay
 delay:
