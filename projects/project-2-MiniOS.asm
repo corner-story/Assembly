@@ -6,6 +6,8 @@ start:
     mov ax, 7A00H
     mov ss, ax
     mov sp, 0200H
+
+    mov bp, 0           ; flag
     
     ; 安装新的int 9
     mov ah, 1
@@ -116,8 +118,8 @@ _fuck_start:
     je _fuck_systemstart
     cmp ah, 3
     je _fuck_clock
-    ; cmp ah, 4
-    ; je _fuck_setclock
+    cmp ah, 4
+    je _fuck_setclock
     jmp short _fuck_return
 
 ; reset system, 重新启动计算机, cs:ip=ffff:0000
@@ -147,7 +149,10 @@ _fuck_systemstart:
 _fuck_clock:
     call showclock
     jmp short _fuck_return
-
+; 在1页修改clock
+_fuck_setclock:
+    call setclock
+    jmp short _fuck_return
 _fuck_return:
     pop di
     pop es
@@ -158,6 +163,126 @@ _fuck_return:
     pop bx
     pop ax
     ret
+
+; 在1页上修改clock
+setclock:
+    jmp short _setclockstart
+_timemessage:    db "input time(YY/MM/DD hh:mm:ss): ", 0
+_cmosindex:      db 9, 8, 7, 4, 2, 0
+_setclockstart:
+    push ax
+    push bx
+    push cx
+    push dx
+    push ds
+    push si
+    push es
+    push di
+
+    mov al, 1
+    mov ah, 5
+    int 10H  
+
+    mov bx, 1
+    call clearscreen
+
+    mov ax, 07E0H
+    mov ds, ax
+    mov si, offset _timemessage
+
+    mov ax, 0B800H
+    mov es, ax
+    mov di, 4096+(10*80+15)*2
+    mov ah, 2
+    call showstr
+
+    mov bp, 0                         ; 当按下ESC键时会自动修改为1
+
+    mov di, 4096+(10*80+46)*2         ; 用户输入在屏幕上显示的位置
+    mov si, offset _cmosindex         ; CMOS中的index
+    mov bx, 0
+_waitinput:
+    ; 这里dosbox中有用, 在virtualbox中没用
+    cmp bp, 1                       ; 用户按下ESC键
+    je _setclock_end
+
+    mov ah, 0
+    int 16H                         ; 等待输入
+
+    cmp al, 0DH                     ; 回车
+    je _INPUT_ENTER
+    cmp al, 08H                     ; 删除键
+    je _INPUT_BACKSPACE
+
+    jmp _INPUT_CHAR
+
+_INPUT_ENTER:
+    cmp bx, 17
+    jne _waitinput
+    ; 将用户输入的时间写入CMOS
+    ; ds:si --> cmos index
+    ; es:di --> screen str
+    mov cx, 6
+_WRITE_CMOS:
+    mov dh, es:[di]
+    mov dl, es:[di+2]
+
+    shl dh, 1
+    shl dh, 1
+    shl dh, 1
+    shl dh, 1
+    and dl, 00001111b
+    or dh, dl               ; 计算结果保存在dh中
+
+    mov al, ds:[si]
+    out 70H, al
+    mov al, dh
+    out 71H, al
+
+    inc si
+    add di, 6
+    loop _WRITE_CMOS
+    jmp _setclock_end
+_INPUT_BACKSPACE:
+    cmp bx, 0
+    je _waitinput
+    dec bx
+    push bx
+    add bx, bx
+    mov byte ptr es:[di+bx], ' '
+    pop bx
+    jmp _waitinput
+_INPUT_CHAR:
+    cmp bx, 17
+    je _waitinput
+    cmp al, 20H
+    jb _waitinput
+    cmp al, 7FH
+    je _waitinput
+    push bx
+    add bx, bx
+    mov es:[di+bx], al
+    pop bx
+    inc bx
+    jmp _waitinput
+
+
+_setclock_end:
+    ; 显示第0页
+    mov al, 0
+    mov ah, 5
+    int 10H 
+
+    pop di
+    pop es
+    pop si
+    pop ds
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+
 
 ; 在1页显示时钟
 showclock:
@@ -208,7 +333,8 @@ _loopshows_toinfo:
     add si, 3
     loop _loopshows_toinfo
 
-    mov di, 4000 + (1*80+0)*2
+    ; 显示缓冲区共8页, 每页4kb
+    mov di, 4096*1 + (10*80+32)*2
     mov si, offset _timeinfo
     mov cx, 18
 _loopshows_toscreen:
@@ -322,7 +448,7 @@ clearscreen:
     push es
     push di
 
-    mov ax, 4000
+    mov ax, 4096
     mul bx
     mov di, ax
 
@@ -407,10 +533,10 @@ _NEWINT9:
     call dword ptr ds:[bx]
 
     cmp al, 0001H               ; 检测ESC
-    jne _ONTHERS
+    jne _OTHERS
     mov bp, 1
     jmp short _NEWINT9_RETURN
-_ONTHERS:
+_OTHERS:
     cmp al, 3BH                 ; 检测F1
     jne _NEWINT9_RETURN
     ; 修改屏幕显示属性
