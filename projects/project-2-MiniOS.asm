@@ -7,8 +7,10 @@ start:
     mov ss, ax
     mov sp, 0200H
     
+    mov bx, 0
     call clearscreen
     call showinfo
+
     call selectinput
 
     jmp $
@@ -95,23 +97,119 @@ _fuck_start:
     mov si, offset fuck + 2
     cmp ah, 1
     je _fuck_reset
-    ; cmp ah, 2
-    ; je _fuck_systemstart
-    ; cmp ah, 3
-    ; je _fuck_clock
+    cmp ah, 2
+    je _fuck_systemstart
+    cmp ah, 3
+    je _fuck_clock
     ; cmp ah, 4
     ; je _fuck_setclock
     jmp short _fuck_return
 
+; reset system, 重新启动计算机, cs:ip=ffff:0000
 _fuck_reset:
     jmp dword ptr ds:[si]
+; start system, 从硬盘引导计算机
+_fuck_systemstart:
+    mov ax, 0
+    mov es, ax
+    mov bx, 7C00H
 
+    mov al, 1
+    mov ch, 0
+    mov cl, 1
+    mov dh, 0
+    mov dl, 80h
+    mov ah, 2
+    int 13H
+
+    mov ax, 7C00H
+    jmp ax
+; 在1页显示时钟
+_fuck_clock:
+    call showclock
+    jmp short _fuck_return
 
 _fuck_return:
 
     ret
 
+; 在1页显示时钟
+showclock:
+    jmp short _showclockstart
+_timeindex:    db 9, 8, 7, 4, 2, 0
+_timeinfo:     db "00/00/00 00:00:00 ", 0
+_showclockstart:
+    push ax
+    push bx
+    push cx
+    push ds
+    push si
+    push es
+    push di
+    push bp
 
+    mov al, 1
+    mov ah, 5
+    int 10H
+    ; 清屏
+    mov bx, 1
+    call clearscreen
+    mov bp, 0                    ; 按下ESC时修改bp为1
+    mov ax, 0B800H
+    mov es, ax
+
+    mov ax, 07E0H
+    mov ds, ax
+_loopshowtime:
+    mov si, offset _timeinfo
+    mov bx, offset _timeindex
+    mov cx, 6
+_loopshows_toinfo:
+    mov al, ds:[bx]
+    out 70H, al
+    in al, 71H
+
+    mov ah, al
+    shr al, 1
+    shr al, 1
+    shr al, 1
+    shr al, 1
+    and ah, 00001111b
+    add ax, 3030H
+
+    mov ds:[si], ax
+    inc bx
+    add si, 3
+    loop _loopshows_toinfo
+
+    mov di, 4000 + (1*80+0)*2
+    mov si, offset _timeinfo
+    mov cx, 18
+_loopshows_toscreen:
+    mov al, ds:[si]
+    mov es:[di], al
+    inc si
+    add di, 2
+    loop _loopshows_toscreen
+
+    ; 查看bp的值, 检测是否按下ESC键
+    cmp bp, 1
+    jne _loopshowtime
+
+    ; 显示0页
+    mov al, 0
+    mov ah, 5
+    int 10H
+
+    pop bp
+    pop di
+    pop es
+    pop si
+    pop ds
+    pop cx
+    pop bx
+    pop ax
+    ret
 
 
 
@@ -189,15 +287,22 @@ _showreturn:
 
 
 ; 清屏
+; bx=页号
 clearscreen:
     push ax
+    push bx
     push cx
+    push dx
     push es
     push di
 
+    mov ax, 4000
+    mul bx
+    mov di, ax
+
     mov ax, 0B800H
     mov es, ax
-    mov di, 0
+    ; mov di, 0
     mov cx, 4000
 _loopclear:
     mov byte ptr es:[di], ' '
@@ -206,7 +311,28 @@ _loopclear:
 
     pop di
     pop es
+    pop dx
     pop cx
+    pop bx
+    pop ax
+    ret
+
+; delay
+delay:
+    push ax
+    push dx
+
+    mov ax, 0000H
+    mov dx, 0010H
+_loopdelay:
+    sub ax, 1
+    sbb dx, 0
+    cmp ax, 0
+    jne _loopdelay
+    cmp dx, 0
+    jne _loopdelay
+
+    pop dx
     pop ax
     ret
 code ends
